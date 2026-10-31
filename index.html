@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SolverX Status</title>
+<meta name="description" content="Current availability and incident history for SolverX services.">
+<style>
+  :root {
+    --bg: #f7f7f5; --card: #ffffff; --text: #16181d; --muted: #5f6672; --line: #e3e4e8;
+    --up: #1f9d55; --warn: #d4a017; --down: #d23f3f; --none: #d9dbe0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111317; --card: #191c21; --text: #eceef2; --muted: #9aa1ad; --line: #2a2e35; --none: #343840; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 40px 16px 56px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  h2 { font-size: 15px; margin: 32px 0 10px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .banner { margin: 20px 0 8px; padding: 16px 18px; border-radius: 10px; color: #fff; font-weight: 600; background: var(--none); }
+  .banner.up { background: var(--up); } .banner.warn { background: var(--warn); } .banner.down { background: var(--down); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+  .svc { padding: 16px 18px; border-top: 1px solid var(--line); }
+  .svc:first-child { border-top: 0; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .name { font-weight: 600; }
+  .state { font-size: 13px; font-weight: 600; }
+  .state.up { color: var(--up); } .state.down { color: var(--down); }
+  .bars { display: flex; gap: 2px; margin: 10px 0 6px; height: 28px; }
+  .bars span { flex: 1; border-radius: 2px; background: var(--none); }
+  .bars span.up { background: var(--up); } .bars span.warn { background: var(--warn); } .bars span.down { background: var(--down); }
+  .incident { padding: 14px 18px; border-top: 1px solid var(--line); }
+  .incident:first-child { border-top: 0; }
+  .empty { padding: 16px 18px; color: var(--muted); }
+  footer { margin-top: 36px; }
+  a { color: inherit; }
+  @media (max-width: 520px) { .bars span:nth-child(-n+30) { display: none; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SolverX Status</h1>
+    <span class="muted" id="updated">Loading…</span>
+  </header>
+  <div class="banner" id="banner">Checking services…</div>
+
+  <h2>Services</h2>
+  <div class="card" id="services"></div>
+  <p class="muted">Bars show daily availability for the last 90 days (UTC). Grey means no data for that day.</p>
+
+  <h2>Incidents</h2>
+  <div class="card" id="incidents"></div>
+
+  <footer class="muted">
+    Each service is checked from outside our network every 10 minutes.
+    To report a problem, email <a href="mailto:support@solverx.ai">support@solverx.ai</a>.
+  </footer>
+</main>
+<script>
+const DAYS = 90;
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const fmt = iso => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+const level = pct => pct === null ? '' : pct >= 99.9 ? 'up' : pct >= 99 ? 'warn' : 'down';
+
+async function getJSON(path, fallback) {
+  try { const r = await fetch(path + '?t=' + Date.now(), { cache: 'no-store' }); return r.ok ? await r.json() : fallback; }
+  catch { return fallback; }
+}
+
+async function render() {
+  const [status, daily, incidents] = await Promise.all([
+    getJSON('data/status.json', { services: [] }),
+    getJSON('data/daily.json', {}),
+    getJSON('data/incidents.json', []),
+  ]);
+
+  document.getElementById('updated').textContent = status.updated ? 'Last checked ' + fmt(status.updated) : 'No checks yet';
+  const down = status.services.filter(s => !s.up).length;
+  const banner = document.getElementById('banner');
+  banner.className = 'banner ' + (status.services.length === 0 ? '' : down === 0 ? 'up' : down < status.services.length ? 'warn' : 'down');
+  banner.textContent = status.services.length === 0 ? 'No data yet'
+    : down === 0 ? 'All systems operational'
+    : down < status.services.length ? 'Some systems are experiencing problems' : 'Major outage';
+
+  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+  const list = document.getElementById('services'); list.replaceChildren();
+  for (const s of status.services) {
+    const days = daily[s.id] || {};
+    let checks = 0, ok = 0;
+    const bars = el('div', 'bars');
+    for (let i = DAYS - 1; i >= 0; i--) {
+      const d = new Date(today); d.setUTCDate(d.getUTCDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const v = days[key];
+      const pct = v ? (100 * v[1] / v[0]) : null;
+      if (v) { checks += v[0]; ok += v[1]; }
+      const b = el('span', level(pct));
+      b.title = key + (pct === null ? ': no data' : ': ' + pct.toFixed(2) + '% available');
+      bars.append(b);
+    }
+    const item = el('div', 'svc');
+    const top = el('div', 'row');
+    const left = el('div'); left.append(el('div', 'name', s.name), el('div', 'muted', s.host));
+    top.append(left, el('div', 'state ' + (s.up ? 'up' : 'down'), s.up ? 'Operational' : 'Down'));
+    const foot = el('div', 'row muted');
+    foot.append(el('span', null, checks ? (100 * ok / checks).toFixed(2) + '% available (90 days)' : ''),
+                el('span', null, (s.up ? 'Up' : 'Down') + ' since ' + fmt(s.since)));
+    item.append(top, bars, foot);
+    list.append(item);
+  }
+
+  const inc = document.getElementById('incidents'); inc.replaceChildren();
+  if (!incidents.length) inc.append(el('div', 'empty', 'No incidents reported.'));
+  for (const i of incidents) {
+    const box = el('div', 'incident');
+    box.append(el('div', 'name', i.title), el('div', 'muted', i.date + ' · ' + i.status));
+    for (const u of (i.updates || [])) box.append(el('p', null, u.time + ' — ' + u.text));
+    inc.append(box);
+  }
+}
+
+render();
+setInterval(render, 5 * 60 * 1000);
+</script>
+</body>
+</html>
