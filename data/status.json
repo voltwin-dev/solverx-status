@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-11T18:43:46+00:00",
+  "updated": "2026-11-11T18:52:49+00:00",
   "services": [
     {
       "id": "studio",
@@ -7,7 +7,7 @@
       "host": "app.solverx.ai",
       "up": true,
       "code": 200,
-      "ms": 245,
+      "ms": 104,
       "since": "2026-10-31T18:42:44+00:00"
     },
     {
@@ -16,7 +16,7 @@
       "host": "api.solverx.ai",
       "up": true,
       "code": 200,
-      "ms": 712,
+      "ms": 401,
       "since": "2026-10-31T18:42:44+00:00"
     },
     {
@@ -25,7 +25,7 @@
       "host": "auth.solverx.ai",
       "up": true,
       "code": 200,
-      "ms": 587,
+      "ms": 399,
       "since": "2026-10-31T18:42:44+00:00"
     },
     {
@@ -34,7 +34,7 @@
       "host": "www.solverx.ai",
       "up": true,
       "code": 200,
-      "ms": 100,
+      "ms": 70,
       "since": "2026-10-31T18:42:44+00:00"
     }
   ]
